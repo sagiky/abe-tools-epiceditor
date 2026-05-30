@@ -59,14 +59,33 @@ impl PlayerPrefsData {
         Ok(Self { data })
     }
 
-    /// Decode directly from raw protobuf bytes (PC save format)
+    /// Decode from raw protobuf bytes or base64-encoded protobuf (PC save format)
+    /// Tries raw protobuf first, then base64-decoded protobuf
     pub fn from_proto_bytes(bytes: &[u8]) -> anyhow::Result<Self> {
-        let data = PlayerData::decode(bytes)?;
+        // Try raw protobuf first
+        if let Ok(data) = PlayerData::decode(bytes) {
+            return Ok(Self { data });
+        }
+
+        // If that fails, try treating it as base64-encoded protobuf
+        let as_str = std::str::from_utf8(bytes)
+            .map_err(|_| anyhow!("Not valid UTF-8 or protobuf"))?;
+        let decoded = BASE64_STANDARD.decode(as_str.trim().as_bytes())
+            .map_err(|e| anyhow!("Not valid protobuf or base64: {}", e))?;
+        let data = PlayerData::decode(decoded.as_slice())?;
         Ok(Self { data })
     }
 
-    /// Encode directly to raw protobuf bytes (cool cool cool uh)
+    /// Encode to base64-encoded protobuf (PC save format)
     pub fn to_proto_bytes(&self) -> anyhow::Result<Vec<u8>> {
+        let mut buf = Vec::new();
+        self.data.encode(&mut buf)?;
+        let encoded = BASE64_STANDARD.encode(&buf);
+        Ok(encoded.into_bytes())
+    }
+
+    /// Encode to raw protobuf bytes (no base64)
+    pub fn to_proto_bytes_raw(&self) -> anyhow::Result<Vec<u8>> {
         let mut buf = Vec::new();
         self.data.encode(&mut buf)?;
         Ok(buf)
