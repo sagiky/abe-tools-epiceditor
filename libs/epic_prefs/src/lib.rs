@@ -59,6 +59,19 @@ impl PlayerPrefsData {
         Ok(Self { data })
     }
 
+    /// Decode directly from raw protobuf bytes (PC save format)
+    pub fn from_proto_bytes(bytes: &[u8]) -> anyhow::Result<Self> {
+        let data = PlayerData::decode(bytes)?;
+        Ok(Self { data })
+    }
+
+    /// Encode directly to raw protobuf bytes (cool cool cool uh)
+    pub fn to_proto_bytes(&self) -> anyhow::Result<Vec<u8>> {
+        let mut buf = Vec::new();
+        self.data.encode(&mut buf)?;
+        Ok(buf)
+    }
+
     #[cfg(feature = "json")]
     pub fn from_json(contents: &str) -> anyhow::Result<Self> {
         let data = serde_json::from_str::<PlayerData>(contents)?;
@@ -77,7 +90,6 @@ impl PlayerPrefsData {
 
     #[cfg(feature = "ron")]
     pub fn from_ron(contents: &str) -> anyhow::Result<Self> {
-        //todo: there is def a less stupid way of doing this
         let options = Options::default().with_default_extension(Extensions::IMPLICIT_SOME);
         let data = options.from_str::<PlayerData>(contents)?;
         Ok(Self { data })
@@ -92,36 +104,36 @@ impl PlayerPrefsData {
     pub fn to_ron_pretty(&self) -> ron::Result<String> {
         ron::ser::to_string_pretty::<PlayerData>(&self.data, Default::default())
     }
-    
+
     #[cfg(feature = "sdkv2")]
     pub fn from_sdkv2(contents: &str) -> anyhow::Result<Self> {
         let cleaned_contents = contents.replace("_","/");
         let cleaned_contents = cleaned_contents.replace("-","+");
-        
+
         let decoded = BASE64_STANDARD.decode(cleaned_contents.as_bytes())?;
-        
+
         let decompressed = decompress_data(decoded.as_slice())?;
-        
+
         let decoded = BASE64_STANDARD.decode(decompressed)?;
-        
+
         let data = PlayerData::decode(decoded.as_slice())?;
         Ok(Self { data })
     }
-    
+
     #[cfg(feature = "sdkv2")]
     pub fn to_sdkv2(&self) -> anyhow::Result<String> {
         let mut buf = Vec::new();
         self.data.encode(&mut buf)?;
-        
+
         let encoded = BASE64_STANDARD.encode(buf);
-        
+
         let compressed = compress_data(encoded)?;
-        
+
         let encoded = BASE64_STANDARD.encode(compressed);
-        
+
         let encoded = encoded.replace("/","_");
         let encoded = encoded.replace("+","-");
-        
+
         Ok(encoded)
     }
 
